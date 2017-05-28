@@ -1,0 +1,11 @@
+random shit
+
+idea: use a generative model
+
+what is the probability of observing this cell sample?
+
+model latent variables after this
+
+use autoencoder to find MLE
+
+have to explicitly model the zero drop out for this
