@@ -13,58 +13,58 @@ os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
 
 def loss_function(true_label, reconstructed_label):
-  zero = tf.zeros(tf.shape(true_label), dtype=tf.float32)
-  bool_vector = tf.not_equal(true_label, zero)
-  new_true = tf.where(bool_vector, true_label, zero)
-  new_reconstructed = tf.where(bool_vector, reconstructed_label, zero)
-  count = tf.count_nonzero(true_label)
-  count = tf.to_float(count)
-  return tf.reduce_sum(tf.square(new_reconstructed - new_true)) / count
+    zero = tf.zeros(tf.shape(true_label), dtype=tf.float32)
+    bool_vector = tf.not_equal(true_label, zero)
+    new_true = tf.where(bool_vector, true_label, zero)
+    new_reconstructed = tf.where(bool_vector, reconstructed_label, zero)
+    count = tf.count_nonzero(true_label)
+    count = tf.to_float(count)
+    return tf.reduce_sum(tf.square(new_reconstructed - new_true)) / count
 
 
 def autoencoder(gene_matrix, dimensions, genes_expressed, scale=True):
-        if scale:
-                min_max_scaler = preprocessing.MinMaxScaler()
-                train_gene_mat = min_max_scaler.fit_transform(gene_matrix)
-        else:
-                train_gene_mat = gene_matrix
+    if scale:
+            min_max_scaler = preprocessing.MinMaxScaler()
+            train_gene_mat = min_max_scaler.fit_transform(gene_matrix)
+    else:
+            train_gene_mat = gene_matrix
 
-        input_placeholder = tf.placeholder(tf.float32, shape=[None, genes_expressed])
-        h1s = dimensions
+    input_placeholder = tf.placeholder(tf.float32, shape=[None, genes_expressed])
+    h1s = dimensions
 
-        with tf.name_scope("encode_1"):
+    with tf.name_scope("encode_1"):
 
-                W1 = tf.Variable(tf.truncated_normal(shape=[genes_expressed, h1s], stddev=0.1))
-                b1 = tf.Variable(tf.truncated_normal(shape=[h1s], stddev=0.1))
+            W1 = tf.Variable(tf.truncated_normal(shape=[genes_expressed, h1s], stddev=0.1))
+            b1 = tf.Variable(tf.truncated_normal(shape=[h1s], stddev=0.1))
 
-                h1 = tf.matmul(input_placeholder, W1) + b1
+            h1 = tf.matmul(input_placeholder, W1) + b1
 
-        with tf.name_scope("decode_1"):
-                W2 = tf.Variable(tf.truncated_normal(shape=[h1s, genes_expressed], stddev=0.1))
-                b2 = tf.Variable(tf.truncated_normal(shape=[genes_expressed], stddev=0.1))
-                h2 = tf.matmul(h1, W2) + b2
+    with tf.name_scope("decode_1"):
+            W2 = tf.Variable(tf.truncated_normal(shape=[h1s, genes_expressed], stddev=0.1))
+            b2 = tf.Variable(tf.truncated_normal(shape=[genes_expressed], stddev=0.1))
+            h2 = tf.matmul(h1, W2) + b2
 
 
-        with tf.name_scope("loss_function"):
-                mse = loss_function(input_placeholder, h2)
+    with tf.name_scope("loss_function"):
+            mse = loss_function(input_placeholder, h2)
 
-        with tf.name_scope("train"):
-                backprop = tf.train.AdamOptimizer(0.01).minimize(mse)
+    with tf.name_scope("train"):
+            backprop = tf.train.AdamOptimizer(0.01).minimize(mse)
 
-        sess = tf.Session()
+    sess = tf.Session()
 
-        train_step = 100000
-        # train_step = 5
-        train_batch = train_gene_mat.reshape((-1, genes_expressed))
-        sess.run(tf.global_variables_initializer())
+    train_step = 100000
+    # train_step = 5
+    train_batch = train_gene_mat.reshape((-1, genes_expressed))
+    sess.run(tf.global_variables_initializer())
 
-        for i in range(train_step):
-                ind = i%train_gene_mat.shape[0]
-                data = train_gene_mat[ind].reshape((1, genes_expressed))
-                _, loss2, W_1, b_1 = sess.run([backprop, mse, W1, b1], feed_dict={input_placeholder:data})
-                if i % 1000 == 0:
-                        print(i, loss2)
-        return W_1, b_1
+    for i in range(train_step):
+            ind = i%train_gene_mat.shape[0]
+            data = train_gene_mat[ind].reshape((1, genes_expressed))
+            _, loss2, W_1, b_1 = sess.run([backprop, mse, W1, b1], feed_dict={input_placeholder:data})
+            if i % 1000 == 0:
+                    print(i, loss2)
+    return W_1, b_1
 
 def generateSimulatedDimensionalityReductionData(n_clusters, n, d, k, sigma, decay_coef):
         """
