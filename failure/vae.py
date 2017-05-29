@@ -38,9 +38,9 @@ def create_norm_lookup(gene_matrix):
 #     gene_matrix[:,k] = (gene_matrix[:,k] - norm[k][1])/norm[k][0]
 
 mb_size = 1
-z_dim = 200
-X_dim = 20 #mnist.train.images.shape[1]
-h_dim = 200
+z_dim = 2
+X_dim = 200 #mnist.train.images.shape[1]
+h_dim = 20
 cnt = 0
 lr = 1e-5
 
@@ -88,10 +88,10 @@ def next_batch(M, ind, mb_size, n):
         return M[:, ind:ind+mb_size]
 
 for it in range(30000):
-    ind = it%d
+    ind = it%n
     # X = sample_X(mb_size)
     # X = gene_matrix[:,ind:ind+mb_size]
-    X = next_batch(gene_matrix, ind, mb_size, n)
+    X = next_batch(gene_matrix, ind, mb_size, d)
     X = Variable(torch.from_numpy(X).float()).view(mb_size,d)
 
     """ Reconstruction phase """
