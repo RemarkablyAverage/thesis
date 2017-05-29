@@ -23,7 +23,8 @@ X, Y, Z, ids = generateSimulatedDimensionalityReductionData(n_clusters, n, d, k,
 gene_matrix = np.copy(Y)
 # np.random.shuffle(np.transpose(gene_matrix))
 gene_matrix = gene_matrix.T
-
+min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0,1))
+gene_matrix = min_max_scaler.fit_transform(gene_matrix)
 
 def create_norm_lookup(gene_matrix):
     ret = dict([])
@@ -37,34 +38,33 @@ def create_norm_lookup(gene_matrix):
 #     gene_matrix[:,k] = (gene_matrix[:,k] - norm[k][1])/norm[k][0]
 
 mb_size = 1
-z_dim = 2
-X_dim = d #mnist.train.images.shape[1]
-y_dim = d #mnist.train.labels.shape[1]
-h_dim = 10
+z_dim = 200
+X_dim = 20 #mnist.train.images.shape[1]
+h_dim = 200
 cnt = 0
 lr = 1e-5
 
 
 # Encoder
 Q = torch.nn.Sequential(
-    torch.nn.Linear(X_dim, h_dim, bias=False),
+    torch.nn.Linear(X_dim, h_dim, bias=True),
     torch.nn.ReLU(),
-    torch.nn.Linear(h_dim, z_dim, bias=False)
+    torch.nn.Linear(h_dim, z_dim, bias=True)
 )
 
 # Decoder
 P = torch.nn.Sequential(
-    torch.nn.Linear(z_dim, h_dim, bias=False),
+    torch.nn.Linear(z_dim, h_dim, bias=True),
     torch.nn.ReLU(),
-    torch.nn.Linear(h_dim, X_dim, bias=False),
+    torch.nn.Linear(h_dim, X_dim, bias=True),
     torch.nn.Sigmoid()
 )
 
 # Discriminator
 D = torch.nn.Sequential(
-    torch.nn.Linear(z_dim, h_dim, bias=False),
+    torch.nn.Linear(z_dim, h_dim, bias=True),
     torch.nn.ReLU(),
-    torch.nn.Linear(h_dim, 1, bias=False),
+    torch.nn.Linear(h_dim, 1, bias=True),
     torch.nn.Sigmoid()
 )
 
@@ -132,6 +132,9 @@ for it in range(30000):
 
     # Print and plot every now and then
     if it % 1000 == 0:
+        e = Q.parameters()
+        print(e.next())
+        print(e.next())
         print('Iter-{}; D_loss: {:.4}; G_loss: {:.4}; recon_loss: {:.4}'
               .format(it, D_loss.data[0], G_loss.data[0], recon_loss.data[0]))
         # print X_sample.data.numpy()
@@ -139,12 +142,12 @@ for it in range(30000):
 output = []
 for i in range(n):
     X = gene_matrix[:,i]
-    print "original\n", X
+    print "original\n", i,X
     X = Variable(torch.from_numpy(X).float()).view(1,d)
     # out = (Q(X).data.numpy()[0] - norm[i][1])/norm[i][0]
     out = Q(X).data.numpy()[0]
     output.append(out)
-    print "reconstructed\n", P(Q(X)).data.numpy()[0]
+    print "reconstructed\n", i,P(Q(X)).data.numpy()[0]
     # print "reconstructed\n",(P(Q(X)).data.numpy()[0]- norm[i][1])/norm[i][0]
 output = np.array([x.tolist() for x in output])
 
