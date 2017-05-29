@@ -1,63 +1,166 @@
-from __future__ import print_function
 import torch
-import torch.utils.data
-import torch.nn as nn
+import torch.nn
+import torch.nn.functional as nn
+import torch.autograd as autograd
 import torch.optim as optim
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import os
 from torch.autograd import Variable
+from plot_test import generateSimulatedDimensionalityReductionData
+from sklearn import preprocessing
+from ZIFA import ZIFA,block_ZIFA
 
-#encoder
-class Q_net(nn.Module):  
-    def __init__(self):
-        super(Q_net, self).__init__()
-        self.lin1 = nn.Linear(X_dim, N)
-        self.lin2 = nn.Linear(N, N)
-        self.lin3gauss = nn.Linear(N, z_dim)
-    def forward(self, x):
-        x = F.droppout(self.lin1(x), p=0.25, training=self.training)
-        x = F.relu(x)
-        x = F.droppout(self.lin2(x), p=0.25, training=self.training)
-        x = F.relu(x)
-        xgauss = self.lin3gauss(x)
-        return xgauss
+n = 200
+d = 20
+k = 2
+sigma = .3
+n_clusters = 3
+decay_coef = .5 # 0.79
+
+X, Y, Z, ids = generateSimulatedDimensionalityReductionData(n_clusters, n, d, k, sigma, decay_coef)
+gene_matrix = np.copy(Y)
+# np.random.shuffle(np.transpose(gene_matrix))
+gene_matrix = gene_matrix.T
+
+
+def create_norm_lookup(gene_matrix):
+    ret = dict([])
+    for i in range(gene_matrix.shape[1]):
+        ret[i] = (np.std(gene_matrix[:,i]), np.mean(gene_matrix[:,i]))
+    return ret
+
+# norm = create_norm_lookup(gene_matrix)
+
+# for k in norm.keys():
+#     gene_matrix[:,k] = (gene_matrix[:,k] - norm[k][1])/norm[k][0]
+
+mb_size = 1
+z_dim = 2
+X_dim = d #mnist.train.images.shape[1]
+y_dim = d #mnist.train.labels.shape[1]
+h_dim = 10
+cnt = 0
+lr = 1e-5
+
+
+# Encoder
+Q = torch.nn.Sequential(
+    torch.nn.Linear(X_dim, h_dim, bias=False),
+    torch.nn.ReLU(),
+    torch.nn.Linear(h_dim, z_dim, bias=False)
+)
 
 # Decoder
-class P_net(nn.Module):  
-    def __init__(self):
-        super(P_net, self).__init__()
-        self.lin1 = nn.Linear(z_dim, N)
-        self.lin2 = nn.Linear(N, N)
-        self.lin3 = nn.Linear(N, X_dim)
-    def forward(self, x):
-        x = self.lin1(x)
-        x = F.dropout(x, p=0.25, training=self.training)
-        x = F.relu(x)
-        x = self.lin2(x)
-        x = F.dropout(x, p=0.25, training=self.training)
-        x = self.lin3(x)
-        return F.sigmoid(x)
+P = torch.nn.Sequential(
+    torch.nn.Linear(z_dim, h_dim, bias=False),
+    torch.nn.ReLU(),
+    torch.nn.Linear(h_dim, X_dim, bias=False),
+    torch.nn.Sigmoid()
+)
 
 # Discriminator
-class D_net_gauss(nn.Module):  
-    def __init__(self):
-        super(D_net_gauss, self).__init__()
-        self.lin1 = nn.Linear(z_dim, N)
-        self.lin2 = nn.Linear(N, N)
-        self.lin3 = nn.Linear(N, 1)
-    def forward(self, x):
-        x = F.dropout(self.lin1(x), p=0.2, training=self.training)
-        x = F.relu(x)
-        x = F.dropout(self.lin2(x), p=0.2, training=self.training)
-        x = F.relu(x)
-        return F.sigmoid(self.lin3(x))
+D = torch.nn.Sequential(
+    torch.nn.Linear(z_dim, h_dim, bias=False),
+    torch.nn.ReLU(),
+    torch.nn.Linear(h_dim, 1, bias=False),
+    torch.nn.Sigmoid()
+)
 
 
-torch.manual_seed(10)  
-Q, P = Q_net(), P_net()     # Encoder/Decoder  
-D_gauss = D_net_gauss()                # Discriminator adversarial  
+def reset_grad():
+    Q.zero_grad()
+    P.zero_grad()
+    D.zero_grad()
+
+Q_solver = optim.Adam(Q.parameters(), lr=lr)
+P_solver = optim.Adam(P.parameters(), lr=lr)
+D_solver = optim.Adam(D.parameters(), lr=lr)
+
+def next_batch(M, ind, mb_size, n):
+    if ind + mb_size >= n:
+        diff = ind + mb_size - n
+        fh = M[:, 0:diff]
+        sh = M[:, ind:]
+        return np.dstack((fh,sh))
+    else:
+        return M[:, ind:ind+mb_size]
+
+for it in range(30000):
+    ind = it%d
+    # X = sample_X(mb_size)
+    # X = gene_matrix[:,ind:ind+mb_size]
+    X = next_batch(gene_matrix, ind, mb_size, n)
+    X = Variable(torch.from_numpy(X).float()).view(mb_size,d)
+
+    """ Reconstruction phase """
+    z_sample = Q(X)
+    X_sample = P(z_sample)
+    # print "actual", X.data.numpy()
+    # print "recovered", X_sample.data.numpy()
+    recon_loss = nn.binary_cross_entropy(X_sample, X)
+
+    recon_loss.backward()
+    P_solver.step()
+    Q_solver.step()
+    reset_grad()
+
+    """ Regularization phase """
+    # Discriminator
+    z_real = Variable(torch.randn(mb_size, z_dim))
+    z_fake = Q(X)
+
+    D_real = D(z_real)
+    D_fake = D(z_fake)
+
+    D_loss = -torch.mean(torch.log(D_real) + torch.log(1 - D_fake))
+
+    D_loss.backward()
+    D_solver.step()
+    reset_grad()
+
+    # Generator
+    z_fake = Q(X)
+    D_fake = D(z_fake)
+
+    G_loss = -torch.mean(torch.log(D_fake))
+
+    G_loss.backward()
+    Q_solver.step()
+    reset_grad()
+
+    # Print and plot every now and then
+    if it % 1000 == 0:
+        print('Iter-{}; D_loss: {:.4}; G_loss: {:.4}; recon_loss: {:.4}'
+              .format(it, D_loss.data[0], G_loss.data[0], recon_loss.data[0]))
+        # print X_sample.data.numpy()
+
+output = []
+for i in range(n):
+    X = gene_matrix[:,i]
+    print "original\n", X
+    X = Variable(torch.from_numpy(X).float()).view(1,d)
+    # out = (Q(X).data.numpy()[0] - norm[i][1])/norm[i][0]
+    out = Q(X).data.numpy()[0]
+    output.append(out)
+    print "reconstructed\n", P(Q(X)).data.numpy()[0]
+    # print "reconstructed\n",(P(Q(X)).data.numpy()[0]- norm[i][1])/norm[i][0]
+output = np.array([x.tolist() for x in output])
+
+def plot(X=output, Y=Y, Z=Z, ids=ids):
+    colors = ['red', 'blue', 'green']
+    cluster_ids = sorted(list(set(ids)))
+    for id in cluster_ids:
+        plt.scatter(X[ids == id, 0], X[ids == id, 1], color = colors[id - 1], s = 4)
+        plt.title('True Latent Positions\nFraction of Zeros %2.3f' % (Y == 0).mean())
+        plt.xlim([-25, 25])
+        plt.ylim([-25, 25])
+    plt.show()
 
 
+# plot()
 
+# Zhat, params = block_ZIFA.fitModel(Y, 2)
 
-
-
-
+# plot(X=Zhat)

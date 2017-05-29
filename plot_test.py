@@ -43,23 +43,23 @@ def generateSimulatedDimensionalityReductionData(n_clusters, n, d, k, sigma, dec
     print('Fraction of zeros: %2.3f; decay coef: %2.3f' % ((Y == 0).mean(), decay_coef))
     return X, Y, Z.transpose(), cluster_ids
 
-n = 200
-d = 20
-k = 2
-sigma = .3
-n_clusters = 3
-decay_coef = .023 # 0.79
+# n = 200
+# d = 20
+# k = 2
+# sigma = .3
+# n_clusters = 3
+# decay_coef = .023 # 0.79
 # decay_coef = .1 # 0.64
 # decay_coef = .34 # 0.07
-X, Y, Z, ids = generateSimulatedDimensionalityReductionData(n_clusters, n, d, k, sigma, decay_coef)
+# X, Y, Z, ids = generateSimulatedDimensionalityReductionData(n_clusters, n, d, k, sigma, decay_coef)
 
-def plot(X=X, Y=Y, Z=Z, ids=ids):
-    colors = ['red', 'blue', 'green']
-    cluster_ids = sorted(list(set(ids)))
-    for id in cluster_ids:
-        scatter(Z[ids == id, 0], Z[ids == id, 1], color = colors[id - 1], s = 4)
-        title('True Latent Positions\nFraction of Zeros %2.3f' % (Y == 0).mean())
-        xlim([-4, 4])
-        ylim([-4, 4])
-    show()
+# def plot(X=X, Y=Y, Z=Z, ids=ids):
+#     colors = ['red', 'blue', 'green']
+#     cluster_ids = sorted(list(set(ids)))
+#     for id in cluster_ids:
+#         scatter(Z[ids == id, 0], Z[ids == id, 1], color = colors[id - 1], s = 4)
+#         title('True Latent Positions\nFraction of Zeros %2.3f' % (Y == 0).mean())
+#         xlim([-4, 4])
+#         ylim([-4, 4])
+#     show()
 
